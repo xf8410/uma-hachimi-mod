@@ -1,4 +1,3 @@
-pub mod Text;
 pub mod CanvasScaler;
 pub mod EventSystem;
 pub mod LayoutElement;
@@ -11,8 +10,9 @@ pub mod ContentSizeFitter;
 
 pub fn init() {
     get_assembly_image_or_return!(image, "UnityEngine.UI.dll");
-    
-    Text::init(image);
+
+    // Text::set_text is an auto-translation hook. The primitive UI accessors
+    // below are still required by non-translation layout/gameplay features.
     CanvasScaler::init(image);
     EventSystem::init(image);
     LayoutElement::init(image);
