@@ -2,12 +2,10 @@ use crate::{
     core::Hachimi,
     il2cpp::{
         hook::UnityEngine_UI::CanvasScaler,
-        symbols::{get_field_from_name, Array, SingletonLike},
+        symbols::{get_field_from_name, get_method_addr, Array, SingletonLike},
         types::*
     }
 };
-#[cfg(target_os = "windows")]
-use crate::il2cpp::symbols::get_method_addr;
 
 static mut CLASS: *mut Il2CppClass = 0 as _;
 pub fn class() -> *mut Il2CppClass { unsafe { CLASS } }
