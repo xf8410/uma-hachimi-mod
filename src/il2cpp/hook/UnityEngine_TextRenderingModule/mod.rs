@@ -29,7 +29,7 @@ pub fn init() {
 
     // PopulateWithErrors and TextMesh.set_text are translation/template hooks.
     // Font still provides a type object used by non-translation code.
-    TextGenerator::init(image, install_translation_hook = false);
+    TextGenerator::init(image, false);
     Font::init(image);
-    TextMesh::init(image, install_translation_hook = false);
+    TextMesh::init(image, false);
 }
