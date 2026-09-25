@@ -2,17 +2,10 @@ use crate::il2cpp::{
     symbols::{get_field_from_name, get_field_object_value, get_field_value, set_field_value},
     types::*,
 };
+use widestring::Utf16Str;
 
-/// Native story-timeline accessors for the no-translation build.
-///
-/// Translation JSON, automatic Sugoi requests, text replacement and duration
-/// rewriting are intentionally not part of this module.  The 3-frame training
-/// work will add its own opt-in observer/compressor on these accessors instead
-/// of reusing the translation patcher.
 static mut CLASS: *mut Il2CppClass = std::ptr::null_mut();
-pub fn class() -> *mut Il2CppClass {
-    unsafe { CLASS }
-}
+pub fn class() -> *mut Il2CppClass { unsafe { CLASS } }
 
 static mut TITLE_FIELD: *mut FieldInfo = std::ptr::null_mut();
 pub fn get_Title(this: *mut Il2CppObject) -> *mut Il2CppString {
@@ -36,6 +29,11 @@ pub fn get_Length(this: *mut Il2CppObject) -> i32 {
 pub fn set_Length(this: *mut Il2CppObject, value: i32) {
     set_field_value(this, unsafe { LENGTH_FIELD }, &value);
 }
+
+/// Dormant callback retained so the old AssetBundle source still type-checks.
+/// The no-translation build does not initialize AssetBundle, therefore this
+/// function is never called.
+pub fn on_LoadAsset(_bundle: *mut Il2CppObject, _this: *mut Il2CppObject, _name: &Utf16Str) {}
 
 pub fn init(umamusume: *const Il2CppImage) {
     get_class_or_return!(umamusume, Gallop, StoryTimelineData);
