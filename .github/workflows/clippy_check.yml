@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - 'workbench/**'
   pull_request:
     branches:
       - main
@@ -31,7 +32,7 @@ jobs:
           filters: |
             code_changed:
               - 'src/**'
-              - 'assets/locale/**'
+              - 'assets/locales/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'build.rs'
@@ -63,19 +64,6 @@ jobs:
         run: |
           sudo apt install -y llvm lld
           sudo ln -sf /usr/bin/llvm-ar /usr/local/bin/llvm-lib
-
-      - name: Install cargo-xwin
-        if: steps.filter.outputs.code_changed == 'true' && matrix.target == 'x86_64-pc-windows-msvc'
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-xwin@0.23.1
-
-      - name: Cache cargo-xwin MSVC CRT & Windows SDK
-        if: steps.filter.outputs.code_changed == 'true' && matrix.target == 'x86_64-pc-windows-msvc'
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/cargo-xwin
-          key: ${{ runner.os }}-xwin-cache-v1
 
       - name: Run Clippy (Windows)
         if: steps.filter.outputs.code_changed == 'true' && matrix.target == 'x86_64-pc-windows-msvc'
