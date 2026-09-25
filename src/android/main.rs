@@ -69,7 +69,7 @@ pub extern "C" fn JNI_OnLoad(vm: JavaVM, reserved: *mut c_void) -> jint {
     info!("No-translation profile active: translations off, UI scale 1.0, target FPS 60");
 
     let vm_ptr = vm.get_java_vm_pointer();
-    let _vm = JavaVM::from_raw(vm_ptr).unwrap();
+    let _vm = unsafe { JavaVM::from_raw(vm_ptr).unwrap() };
     let _ = JAVA_VM.set(vm);
     let hachimi = Hachimi::instance();
     *hachimi.plugins.lock().unwrap() = plugin_loader::load_libraries();
@@ -77,6 +77,6 @@ pub extern "C" fn JNI_OnLoad(vm: JavaVM, reserved: *mut c_void) -> jint {
     hook::init(env.get_raw());
 
     info!("JNI_OnLoad");
-    let vm_for_orig = JavaVM::from_raw(vm_ptr).unwrap();
+    let vm_for_orig = unsafe { JavaVM::from_raw(vm_ptr).unwrap() };
     orig_fn(vm_for_orig, reserved)
 }
