@@ -1,63 +1,51 @@
 use std::sync::Arc;
 use crate::{
-    core::{Hachimi, gui::{GameOpts, GAME_OPTS_CACHE}, game::Region},
+    core::{hachimi::SpringUpdateMode, gui::{GameOpts, GAME_OPTS_CACHE}, game::Region, Hachimi},
     il2cpp::{
         sql::{get_champions_resources, get_champions_live_max_year},
         symbols::{IEnumerator, MoveNextFn, SingletonLike, get_method_addr},
-        types::*, utils::umamusume_enum_options
-    }
+        types::*,
+        utils::umamusume_enum_options,
+    },
 };
 #[cfg(target_os = "windows")]
-use crate::windows::free_camera::{self, CameraScene};
-#[cfg(target_os = "windows")]
-use crate::core::live_utils;
+use crate::{core::live_utils, windows::free_camera::{self, FreeCameraMode, FreeCameraScene}};
 #[cfg(target_os = "windows")]
 use super::Director;
-// use std::sync::atomic::{AtomicBool, Ordering};
-// pub static GAME_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 static mut CLASS: *mut Il2CppClass = 0 as _;
-pub fn class() -> *mut Il2CppClass {
-    unsafe { CLASS }
-}
-
+pub fn class() -> *mut Il2CppClass { unsafe { CLASS } }
 pub fn instance() -> *mut Il2CppObject {
-    let Some(singleton) = SingletonLike::new(class()) else {
-        return 0 as _;
-    };
+    let Some(singleton) = SingletonLike::new(class()) else { return 0 as _; };
     singleton.instance()
 }
 
 static mut SOFTWARERESET_ADDR: usize = 0;
 impl_addr_wrapper_fn!(SoftwareReset, SOFTWARERESET_ADDR, (), this: *mut Il2CppObject);
 
-type GameSystemUpdateFn = extern "C" fn(this: *mut Il2CppObject);
 #[cfg(target_os = "windows")]
 fn apply_free_camera_live_pause_request() {
-    if !free_camera::take_toggle_live_pause_request() {
-        return;
-    }
+    if !free_camera::take_toggle_live_pause_request() { return; }
     live_utils::toggle_live_pause();
 }
 
 extern "C" fn GameSystem_Update(this: *mut Il2CppObject) {
     crate::core::gui::race_slider_drain();
-    Hachimi::instance().drain_skill_data_desc_rebuild();
-
     #[cfg(target_os = "windows")]
     {
         apply_free_camera_live_pause_request();
-
-        // Live and race normally tick from their camera LateUpdate hooks. Keep the
-        // global update path only as a fallback while LiveTimelineControl is paused.
-        if Director::is_live_paused() && free_camera::scene() == CameraScene::Live {
+        if Director::is_live_paused() && free_camera::scene() == FreeCameraScene::Live {
             free_camera::tick();
             apply_free_camera_live_pause_request();
         }
     }
-
     get_orig_fn!(GameSystem_Update, GameSystemUpdateFn)(this);
 }
+
+#[cfg(target_os = "windows")]
+type GameSystemUpdateFn = extern "C" fn(this: *mut Il2CppObject);
+#[cfg(not(target_os = "windows"))]
+type GameSystemUpdateFn = extern "C" fn(this: *mut Il2CppObject);
 
 #[cfg(target_os = "windows")]
 type GameSystemLateUpdateFn = extern "C" fn(this: *mut Il2CppObject);
@@ -84,12 +72,11 @@ fn init_game_opts() {
     }
 }
 
-// good hook for initializing values i guess
 pub fn on_game_initialized() {
     Hachimi::instance().init_character_data();
-    // GAME_INITIALIZED.store(true, Ordering::Relaxed);
     Hachimi::instance().init_skill_info();
-    Hachimi::instance().init_skill_data_desc();
+    // SkillDataDesc belongs to the translation database. The no-translation
+    // build intentionally does not load or rebuild it.
     init_game_opts();
 
     #[cfg(target_os = "android")]
@@ -97,33 +84,29 @@ pub fn on_game_initialized() {
     #[cfg(target_os = "windows")]
     super::UIManager::apply_ui_scale();
 
-    // Invoke plugin callbacks
     let hachimi = Hachimi::instance();
     let callbacks = hachimi.plugin_init_callbacks.lock().unwrap();
     for (callback, userdata) in callbacks.iter() {
-        let callback_ptr = *callback;
-        if callback_ptr == 0 { continue; }
-        let callback: unsafe extern "C" fn(*mut std::ffi::c_void) = unsafe { std::mem::transmute(callback_ptr) };
+        if *callback == 0 { continue; }
+        let callback: unsafe extern "C" fn(*mut std::ffi::c_void) = unsafe { std::mem::transmute(*callback) };
         unsafe { callback(*userdata as *mut std::ffi::c_void); }
     }
 }
 
 extern "C" fn InitializeGame_MoveNext(enumerator: *mut Il2CppObject) -> bool {
     let moved = get_orig_fn!(InitializeGame_MoveNext, MoveNextFn)(enumerator);
-    if !moved {
-        // Game has finished initializing
-        on_game_initialized();
-    }
+    if !moved { on_game_initialized(); }
     moved
 }
 
 fn InitializeGameCommon(enumerator: IEnumerator) -> IEnumerator {
-    if Hachimi::instance().config.load().ui_scale == 1.0 { return enumerator; }
-
-    if let Err(e) = enumerator.hook_move_next(InitializeGame_MoveNext) {
-        error!("Failed to hook InitializeGame enumerator: {}", e);
+    // Android no longer installs a UI scale hook; keep the enumerator untouched.
+    #[cfg(target_os = "windows")]
+    if Hachimi::instance().config.load().ui_scale != 1.0 {
+        if let Err(e) = enumerator.hook_move_next(InitializeGame_MoveNext) {
+            error!("Failed to hook InitializeGame enumerator: {}", e);
+        }
     }
-
     enumerator
 }
 
@@ -141,26 +124,22 @@ extern "C" fn InitializeGameOther(this: *mut Il2CppObject) -> IEnumerator {
 
 pub fn init(umamusume: *const Il2CppImage) {
     get_class_or_return!(umamusume, Gallop, GameSystem);
-
     if Hachimi::instance().game.region == Region::Japan {
-        let InitializeGame_addr = get_method_addr(GameSystem, c"InitializeGame", 1);
-        new_hook!(InitializeGame_addr, InitializeGameJp);
+        let addr = get_method_addr(GameSystem, c"InitializeGame", 1);
+        new_hook!(addr, InitializeGameJp);
+    } else {
+        let addr = get_method_addr(GameSystem, c"InitializeGame", 0);
+        new_hook!(addr, InitializeGameOther);
     }
-    else {
-        let InitializeGame_addr = get_method_addr(GameSystem, c"InitializeGame", 0);
-        new_hook!(InitializeGame_addr, InitializeGameOther);
-    }
-
     unsafe {
         CLASS = GameSystem;
         SOFTWARERESET_ADDR = get_method_addr(GameSystem, c"SoftwareReset", 0);
     }
-
-    let GameSystem_Update_addr = get_method_addr(GameSystem, c"Update", 0);
-    new_hook!(GameSystem_Update_addr, GameSystem_Update);
+    let update_addr = get_method_addr(GameSystem, c"Update", 0);
+    new_hook!(update_addr, GameSystem_Update);
     #[cfg(target_os = "windows")]
     {
-        let GameSystem_LateUpdate_addr = get_method_addr(GameSystem, c"LateUpdate", 0);
-        new_hook!(GameSystem_LateUpdate_addr, GameSystem_LateUpdate);
+        let late_addr = get_method_addr(GameSystem, c"LateUpdate", 0);
+        new_hook!(late_addr, GameSystem_LateUpdate);
     }
 }
