@@ -27,9 +27,9 @@ impl TryFrom<i32> for TextAnchor {
 pub fn init() {
     get_assembly_image_or_return!(image, "UnityEngine.TextRenderingModule.dll");
 
-    // PopulateWithErrors and TextMesh.set_text are translation/template hooks.
+    // PopulateWithErrors is not initialized in the no-translation build.
     // Font still provides a type object used by non-translation code.
-    TextGenerator::init(image, false);
+    TextGenerator::init(image);
     Font::init(image);
     TextMesh::init(image, false);
 }
