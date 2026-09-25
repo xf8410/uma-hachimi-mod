@@ -12,9 +12,8 @@ pub mod ContentSizeFitter;
 pub fn init() {
     get_assembly_image_or_return!(image, "UnityEngine.UI.dll");
 
-    // Text::set_text is an auto-translation hook. The module stays linked and
-    // its method addresses are initialized for non-translation callers, but the
-    // set_text hook itself is not installed.
+    // Resolve Text method addresses used by non-translation code, but do not
+    // install its auto-translation set_text hook.
     Text::init(image, install_translation_hook = false);
     CanvasScaler::init(image);
     EventSystem::init(image);
