@@ -111,7 +111,7 @@ pub mod RaceViewBase;
 #[cfg(target_os = "windows")]
 pub mod RaceEffectManager;
 #[cfg(target_os = "windows")]
-pub mod TitleViewController;
+mod TitleViewController;
 #[cfg(target_os = "windows")]
 pub mod MainGameInitializer;
 pub mod Director;
@@ -166,39 +166,20 @@ mod DownloadManager;
 mod DownloadView;
 #[cfg(target_os = "windows")]
 mod DownloadErrorProcessor;
-#[cfg(target_os = "windows")]
-mod TitleViewController;
-#[cfg(target_os = "windows")]
-pub mod MainGameInitializer;
-pub mod Director;
-mod CySpringNative;
-pub mod LiveViewController;
-pub mod LiveTimeController;
-pub mod HomeViewController;
-pub mod WorkDataManager;
-pub mod AssetManager;
-pub mod WorkJukeboxData;
-pub mod JukeboxBgmSelector;
-pub mod JukeboxHomeTopUI;
-pub mod TempData;
-pub mod MasterJukeboxSetlistMusicData;
-pub mod HubViewControllerBase;
-pub mod LiveTheaterInfo;
-pub mod DownloadPathRegister;
-pub mod MasterDataManager;
-pub mod MasterItemExchangeTop;
 
 pub fn init() {
     get_assembly_image_or_return!(image, "umamusume.dll");
 
-    // Translation/template/text/asset patch hooks are intentionally omitted.
-    // Enum and native field/method access modules stay initialized for the
-    // plugin API and for the later training-animation module.
+    // Translation-only init calls are omitted in the no-translation build.
+    // TextId, StoryTimeline field access and all gameplay/core modules remain.
     TextId::init(image);
     StoryTimelineData::init(image);
     StoryTimelineBlockData::init(image);
     StoryTimelineTrackData::init(image);
     StoryTimelineTextClipData::init(image);
+    StoryTimelineClipData::init(image);
+    StoryTimelineCharaTrackData::init(image);
+    StoryTimelineController::init(image);
     GallopUtil::init(image);
     UIManager::init(image);
     GraphicSettings::init(image);
@@ -208,7 +189,6 @@ pub fn init() {
     DialogCommon::init(image);
     GameSystem::init(image);
     Screen::init(image);
-    StoryTimelineController::init(image);
     CySpringController::init(image);
     MasterDataUtil::init(image);
     DialogCommonBase::init(image);
@@ -245,6 +225,11 @@ pub fn init() {
         RaceViewBase::init(image);
         RaceEffectManager::init(image);
         TitleViewController::init(image);
+        MainGameInitializer::init(image);
+        Connecting::init(image);
+        DownloadManager::init(image);
+        DownloadView::init(image);
+        DownloadErrorProcessor::init(image);
         PartsScheduleBookAutoPlayScreen::init(image);
     }
 
