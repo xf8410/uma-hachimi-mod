@@ -1,4 +1,4 @@
-use crate::{core::template, types::*};
+use crate::{core::template, il2cpp::types::*};
 
 /// Context used by translation code that explicitly ignores TextGenerator
 /// filters. The no-translation build keeps the small type for source/API
