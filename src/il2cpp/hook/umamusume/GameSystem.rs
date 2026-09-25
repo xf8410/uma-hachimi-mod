@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use crate::{
-    core::{hachimi::SpringUpdateMode, gui::{GameOpts, GAME_OPTS_CACHE}, game::Region, Hachimi},
+    core::{Hachimi, gui::{GameOpts, GAME_OPTS_CACHE}, game::Region},
     il2cpp::{
         sql::{get_champions_resources, get_champions_live_max_year},
         symbols::{IEnumerator, MoveNextFn, SingletonLike, get_method_addr},
@@ -9,7 +9,7 @@ use crate::{
     },
 };
 #[cfg(target_os = "windows")]
-use crate::{core::live_utils, windows::free_camera::{self, FreeCameraMode, FreeCameraScene}};
+use crate::windows::free_camera::{self, CameraScene};
 #[cfg(target_os = "windows")]
 use super::Director;
 
@@ -23,10 +23,11 @@ pub fn instance() -> *mut Il2CppObject {
 static mut SOFTWARERESET_ADDR: usize = 0;
 impl_addr_wrapper_fn!(SoftwareReset, SOFTWARERESET_ADDR, (), this: *mut Il2CppObject);
 
+type GameSystemUpdateFn = extern "C" fn(this: *mut Il2CppObject);
 #[cfg(target_os = "windows")]
 fn apply_free_camera_live_pause_request() {
     if !free_camera::take_toggle_live_pause_request() { return; }
-    live_utils::toggle_live_pause();
+    crate::core::live_utils::toggle_live_pause();
 }
 
 extern "C" fn GameSystem_Update(this: *mut Il2CppObject) {
@@ -34,18 +35,13 @@ extern "C" fn GameSystem_Update(this: *mut Il2CppObject) {
     #[cfg(target_os = "windows")]
     {
         apply_free_camera_live_pause_request();
-        if Director::is_live_paused() && free_camera::scene() == FreeCameraScene::Live {
+        if Director::is_live_paused() && free_camera::scene() == CameraScene::Live {
             free_camera::tick();
             apply_free_camera_live_pause_request();
         }
     }
     get_orig_fn!(GameSystem_Update, GameSystemUpdateFn)(this);
 }
-
-#[cfg(target_os = "windows")]
-type GameSystemUpdateFn = extern "C" fn(this: *mut Il2CppObject);
-#[cfg(not(target_os = "windows"))]
-type GameSystemUpdateFn = extern "C" fn(this: *mut Il2CppObject);
 
 #[cfg(target_os = "windows")]
 type GameSystemLateUpdateFn = extern "C" fn(this: *mut Il2CppObject);
@@ -75,8 +71,7 @@ fn init_game_opts() {
 pub fn on_game_initialized() {
     Hachimi::instance().init_character_data();
     Hachimi::instance().init_skill_info();
-    // SkillDataDesc belongs to the translation database. The no-translation
-    // build intentionally does not load or rebuild it.
+    // SkillDataDesc is a translation database feature. Do not load it here.
     init_game_opts();
 
     #[cfg(target_os = "android")]
@@ -100,7 +95,6 @@ extern "C" fn InitializeGame_MoveNext(enumerator: *mut Il2CppObject) -> bool {
 }
 
 fn InitializeGameCommon(enumerator: IEnumerator) -> IEnumerator {
-    // Android no longer installs a UI scale hook; keep the enumerator untouched.
     #[cfg(target_os = "windows")]
     if Hachimi::instance().config.load().ui_scale != 1.0 {
         if let Err(e) = enumerator.hook_move_next(InitializeGame_MoveNext) {
