@@ -29,7 +29,6 @@ def_field_object_accessors!(get_mainCanvas, set_mainCanvas, _MAINCANVAS_FIELD, I
 
 pub fn apply_ui_scale() {
     let config = Hachimi::instance().config.load();
-
     #[allow(unused_mut)]
     let mut scale = config.ui_scale;
 
@@ -38,8 +37,7 @@ pub fn apply_ui_scale() {
         if config.windows.freeform_window {
             if config.windows.freeform_ui_scale_auto {
                 if let Some((_, height)) = crate::windows::wnd_hook::get_client_size() {
-                    scale *= height as f32 / 1080.0 *
-                        config.windows.freeform_ui_scale_auto_ratio;
+                    scale *= height as f32 / 1080.0 * config.windows.freeform_ui_scale_auto_ratio;
                 }
                 scale = scale.clamp(0.1, 10.0);
             }
@@ -65,28 +63,9 @@ pub fn apply_ui_scale() {
                 (*res).y /= scale;
             }
         }
-        
         #[cfg(target_os = "windows")]
         CanvasScaler::set_scaleFactor(*scaler, scale);
     }
-}
-
-type SetHeaderTitleTextFn = extern "C" fn(this: *mut Il2CppObject, text: *mut Il2CppString, guide_id: i32);
-extern "C" fn SetHeaderTitleText(this: *mut Il2CppObject, text_: *mut Il2CppString, guide_id: i32) {
-    let text = unsafe { (*text_).as_utf16str() };
-
-    // The title text (aka the purple ribbon on the top left of the screen) doesn't run
-    // through TextGenerator, so we have to evaluate templates here (by emptying any filter exprs)
-    let new_text = if text.as_slice().contains(&36) { // 36 = dollar sign ($)
-        Hachimi::instance().template_parser
-            .remove_filters(&text.to_string())
-            .to_il2cpp_string()
-    }
-    else {
-        text_
-    };
-
-    get_orig_fn!(SetHeaderTitleText, SetHeaderTitleTextFn)(this, new_text, guide_id)
 }
 
 #[cfg(target_os = "windows")]
@@ -94,16 +73,11 @@ type ChangeResizeUIForPCFn = extern "C" fn(this: *mut Il2CppObject, width: i32, 
 #[cfg(target_os = "windows")]
 extern "C" fn ChangeResizeUIForPC(this: *mut Il2CppObject, width: i32, height: i32) {
     use super::GraphicSettings;
-
     let windows_config = &Hachimi::instance().config.load().windows;
     if !windows_config.freeform_window {
         get_orig_fn!(ChangeResizeUIForPC, ChangeResizeUIForPCFn)(this, width, height);
     }
-
-    // Recreate the render texture so it scales with the resolution
-    if windows_config.freeform_window ||
-        windows_config.resolution_scaling.is_not_default()
-    {
+    if windows_config.freeform_window || windows_config.resolution_scaling.is_not_default() {
         CreateRenderTextureFromScreen(this);
         let graphic_settings = GraphicSettings::instance();
         if !graphic_settings.is_null() {
@@ -116,14 +90,9 @@ extern "C" fn ChangeResizeUIForPC(this: *mut Il2CppObject, width: i32, height: i
 #[cfg(target_os = "windows")]
 pub fn refresh_after_window_resize(width: i32, height: i32) {
     use super::{GraphicSettings, Screen, TapEffectController, WindowsGamepadControl};
-
-    if width <= 0 || height <= 0 {
-        return;
-    }
-
+    if width <= 0 || height <= 0 { return; }
     Screen::update_original_screen_size(width, height);
     WindowsGamepadControl::refresh_after_window_resize();
-
     let this = instance();
     if !this.is_null() {
         CreateRenderTextureFromScreen(this);
@@ -133,33 +102,8 @@ pub fn refresh_after_window_resize(width: i32, height: i32) {
         }
         apply_ui_scale();
     }
-
     let tap_effect_controller = TapEffectController::instance();
     TapEffectController::RefreshAll(tap_effect_controller);
-}
-
-#[cfg(target_os = "android")]
-extern "C" fn WaitBootSetup_MoveNext(enumerator: *mut Il2CppObject) -> bool {
-    use crate::il2cpp::symbols::MoveNextFn;
-    let moved = get_orig_fn!(WaitBootSetup_MoveNext, MoveNextFn)(enumerator);
-    if !moved {
-        apply_ui_scale();
-    }
-    moved
-}
-
-#[cfg(target_os = "android")]
-type WaitBootSetupFn = extern "C" fn(this: *mut Il2CppObject) -> crate::il2cpp::symbols::IEnumerator;
-#[cfg(target_os = "android")]
-extern "C" fn WaitBootSetup(this: *mut Il2CppObject) -> crate::il2cpp::symbols::IEnumerator {
-    let enumerator = get_orig_fn!(WaitBootSetup, WaitBootSetupFn)(this);
-    if Hachimi::instance().config.load().ui_scale == 1.0 { return enumerator; }
-
-    if let Err(e) = enumerator.hook_move_next(WaitBootSetup_MoveNext) {
-        error!("Failed to hook enumerator: {}", e);
-    }
-
-    enumerator
 }
 
 #[cfg(target_os = "windows")]
@@ -170,33 +114,22 @@ impl_addr_wrapper_fn!(CreateRenderTextureFromScreen, CREATERENDERTEXTUREFROMSCRE
 pub fn init(umamusume: *const Il2CppImage) {
     get_class_or_return!(umamusume, Gallop, UIManager);
 
-    let SetHeaderTitleText_addr = get_method_overload_addr(UIManager, "SetHeaderTitleText",
-        &[Il2CppTypeEnum_IL2CPP_TYPE_STRING, Il2CppTypeEnum_IL2CPP_TYPE_VALUETYPE]);
-
-    new_hook!(SetHeaderTitleText_addr, SetHeaderTitleText);
-
+    // Do not install the translation-only SetHeaderTitleText hook. Do not
+    // install Android WaitBootSetup UI scaling either: the no-translation
+    // profile uses the game's native Canvas resolution and only Hachimi's
+    // target FPS hook remains active.
     #[cfg(target_os = "windows")]
     {
         let ChangeResizeUIForPC_addr = get_method_addr(UIManager, c"ChangeResizeUIForPC", 2);
-
         new_hook!(ChangeResizeUIForPC_addr, ChangeResizeUIForPC);
-    }
-
-    #[cfg(target_os = "android")]
-    {
-        let WaitBootSetup_addr = get_method_addr(UIManager, c"WaitBootSetup", 0);
-
-        new_hook!(WaitBootSetup_addr, WaitBootSetup);
     }
 
     unsafe {
         CLASS = UIManager;
         GETCANVASSCALERLIST_ADDR = get_method_addr(UIManager, c"GetCanvasScalerList", 0);
-
         _NOTICECANVAS_FIELD = get_field_from_name(UIManager, c"_noticeCanvas");
         _SYSTEMCANVAS_FIELD = get_field_from_name(UIManager, c"_systemCanvas");
         _MAINCANVAS_FIELD = get_field_from_name(UIManager, c"_mainCanvas");
-
         #[cfg(target_os = "windows")]
         {
             CREATERENDERTEXTUREFROMSCREEN_ADDR = get_method_addr(UIManager, c"CreateRenderTextureFromScreen", 0);
