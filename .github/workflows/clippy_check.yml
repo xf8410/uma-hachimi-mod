@@ -65,6 +65,10 @@ jobs:
           sudo apt install -y llvm lld
           sudo ln -sf /usr/bin/llvm-ar /usr/local/bin/llvm-lib
 
+      - name: Install cargo-xwin
+        if: steps.filter.outputs.code_changed == 'true' && matrix.target == 'x86_64-pc-windows-msvc'
+        run: cargo install cargo-xwin --version 0.23.1 --locked
+
       - name: Run Clippy (Windows)
         if: steps.filter.outputs.code_changed == 'true' && matrix.target == 'x86_64-pc-windows-msvc'
         run: cargo xwin clippy --target ${{ matrix.target }} -- -D warnings
