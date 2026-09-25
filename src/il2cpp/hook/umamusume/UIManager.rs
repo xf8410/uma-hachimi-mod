@@ -2,26 +2,22 @@ use crate::{
     core::Hachimi,
     il2cpp::{
         hook::UnityEngine_UI::CanvasScaler,
-        symbols::{get_method_addr, get_field_from_name, Array, SingletonLike},
+        symbols::{get_field_from_name, Array, SingletonLike},
         types::*
     }
 };
+#[cfg(target_os = "windows")]
+use crate::il2cpp::symbols::get_method_addr;
 
 static mut CLASS: *mut Il2CppClass = 0 as _;
-pub fn class() -> *mut Il2CppClass {
-    unsafe { CLASS }
-}
-
+pub fn class() -> *mut Il2CppClass { unsafe { CLASS } }
 pub fn instance() -> *mut Il2CppObject {
-    let Some(singleton) = SingletonLike::new(class()) else {
-        return 0 as _;
-    };
+    let Some(singleton) = SingletonLike::new(class()) else { return 0 as _; };
     singleton.instance()
 }
 
 static mut GETCANVASSCALERLIST_ADDR: usize = 0;
 impl_addr_wrapper_fn!(GetCanvasScalerList, GETCANVASSCALERLIST_ADDR, Array, this: *mut Il2CppObject);
-
 def_field_object_accessors!(get_noticeCanvas, set_noticeCanvas, _NOTICECANVAS_FIELD, Il2CppObject);
 def_field_object_accessors!(get_systemCanvas, set_systemCanvas, _SYSTEMCANVAS_FIELD, Il2CppObject);
 def_field_object_accessors!(get_mainCanvas, set_mainCanvas, _MAINCANVAS_FIELD, Il2CppObject);
@@ -30,37 +26,25 @@ pub fn apply_ui_scale() {
     let config = Hachimi::instance().config.load();
     #[allow(unused_mut)]
     let mut scale = config.ui_scale;
-
     #[cfg(target_os = "windows")]
     {
-        if config.windows.freeform_window {
-            if config.windows.freeform_ui_scale_auto {
-                if let Some((_, height)) = crate::windows::wnd_hook::get_client_size() {
-                    scale *= height as f32 / 1080.0 * config.windows.freeform_ui_scale_auto_ratio;
-                }
-                scale = scale.clamp(0.1, 10.0);
+        if config.windows.freeform_window && config.windows.freeform_ui_scale_auto {
+            if let Some((_, height)) = crate::windows::wnd_hook::get_client_size() {
+                scale *= height as f32 / 1080.0 * config.windows.freeform_ui_scale_auto_ratio;
             }
-        }
-        else if let Some((width, height)) = crate::windows::utils::get_scaling_res() {
-            if width < height {
-                scale *= width as f32 / 1080.0;
-            }
-            else {
-                scale *= height as f32 / 1080.0;
-            }
+            scale = scale.clamp(0.1, 10.0);
+        } else if let Some((width, height)) = crate::windows::utils::get_scaling_res() {
+            if width < height { scale *= width as f32 / 1080.0; }
+            else { scale *= height as f32 / 1080.0; }
         }
     }
-
     let ui_manager = instance();
     let canvas_scaler_list = GetCanvasScalerList(ui_manager);
     for scaler in unsafe { canvas_scaler_list.as_slice().iter() } {
         #[cfg(target_os = "android")]
         {
             let res = CanvasScaler::get_m_ReferenceResolution(*scaler);
-            unsafe {
-                (*res).x /= scale;
-                (*res).y /= scale;
-            }
+            unsafe { (*res).x /= scale; (*res).y /= scale; }
         }
         #[cfg(target_os = "windows")]
         CanvasScaler::set_scaleFactor(*scaler, scale);
@@ -73,15 +57,11 @@ type ChangeResizeUIForPCFn = extern "C" fn(this: *mut Il2CppObject, width: i32, 
 extern "C" fn ChangeResizeUIForPC(this: *mut Il2CppObject, width: i32, height: i32) {
     use super::GraphicSettings;
     let windows_config = &Hachimi::instance().config.load().windows;
-    if !windows_config.freeform_window {
-        get_orig_fn!(ChangeResizeUIForPC, ChangeResizeUIForPCFn)(this, width, height);
-    }
+    if !windows_config.freeform_window { get_orig_fn!(ChangeResizeUIForPC, ChangeResizeUIForPCFn)(this, width, height); }
     if windows_config.freeform_window || windows_config.resolution_scaling.is_not_default() {
         CreateRenderTextureFromScreen(this);
         let graphic_settings = GraphicSettings::instance();
-        if !graphic_settings.is_null() {
-            GraphicSettings::Update3DRenderTexture(graphic_settings);
-        }
+        if !graphic_settings.is_null() { GraphicSettings::Update3DRenderTexture(graphic_settings); }
     }
     apply_ui_scale();
 }
@@ -96,13 +76,10 @@ pub fn refresh_after_window_resize(width: i32, height: i32) {
     if !this.is_null() {
         CreateRenderTextureFromScreen(this);
         let graphic_settings = GraphicSettings::instance();
-        if !graphic_settings.is_null() {
-            GraphicSettings::Update3DRenderTexture(graphic_settings);
-        }
+        if !graphic_settings.is_null() { GraphicSettings::Update3DRenderTexture(graphic_settings); }
         apply_ui_scale();
     }
-    let tap_effect_controller = TapEffectController::instance();
-    TapEffectController::RefreshAll(tap_effect_controller);
+    TapEffectController::RefreshAll(TapEffectController::instance());
 }
 
 #[cfg(target_os = "windows")]
@@ -112,17 +89,11 @@ impl_addr_wrapper_fn!(CreateRenderTextureFromScreen, CREATERENDERTEXTUREFROMSCRE
 
 pub fn init(umamusume: *const Il2CppImage) {
     get_class_or_return!(umamusume, Gallop, UIManager);
-
-    // Do not install the translation-only SetHeaderTitleText hook. Do not
-    // install Android WaitBootSetup UI scaling either: the no-translation
-    // profile uses the game's native Canvas resolution and only Hachimi's
-    // target FPS hook remains active.
     #[cfg(target_os = "windows")]
     {
         let ChangeResizeUIForPC_addr = get_method_addr(UIManager, c"ChangeResizeUIForPC", 2);
         new_hook!(ChangeResizeUIForPC_addr, ChangeResizeUIForPC);
     }
-
     unsafe {
         CLASS = UIManager;
         GETCANVASSCALERLIST_ADDR = get_method_addr(UIManager, c"GetCanvasScalerList", 0);
@@ -130,8 +101,6 @@ pub fn init(umamusume: *const Il2CppImage) {
         _SYSTEMCANVAS_FIELD = get_field_from_name(UIManager, c"_systemCanvas");
         _MAINCANVAS_FIELD = get_field_from_name(UIManager, c"_mainCanvas");
         #[cfg(target_os = "windows")]
-        {
-            CREATERENDERTEXTUREFROMSCREEN_ADDR = get_method_addr(UIManager, c"CreateRenderTextureFromScreen", 0);
-        }
+        { CREATERENDERTEXTUREFROMSCREEN_ADDR = get_method_addr(UIManager, c"CreateRenderTextureFromScreen", 0); }
     }
 }
