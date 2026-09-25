@@ -78,7 +78,7 @@ pub mod Notification;
 mod TimeUtil;
 pub mod CameraData;
 pub mod DialogManager;
-mod PartsCharaMessageBase;
+pub mod PartsCharaMessageBase;
 pub mod SceneManager;
 mod LowResolutionCamera;
 
@@ -131,6 +131,8 @@ pub mod LiveTheaterInfo;
 pub mod DownloadPathRegister;
 pub mod MasterDataManager;
 pub mod MasterItemExchangeTop;
+pub mod GameDefine;
+pub mod SceneDefine;
 pub mod HorseData;
 pub mod HorseRaceInfo;
 pub mod JikkyoControllerBase;
