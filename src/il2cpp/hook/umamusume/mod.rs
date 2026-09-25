@@ -131,6 +131,26 @@ pub mod LiveTheaterInfo;
 pub mod DownloadPathRegister;
 pub mod MasterDataManager;
 pub mod MasterItemExchangeTop;
+pub mod HorseData;
+pub mod HorseRaceInfo;
+pub mod JikkyoControllerBase;
+pub mod Jikkyo;
+pub mod RaceBGMController;
+pub mod RaceMainViewController;
+pub mod RaceManager;
+pub mod RaceManagerReplayBase;
+pub mod RaceEventPlayer;
+pub mod RaceHorseManagerBase;
+pub mod RaceSoundReplay;
+pub mod RaceUI;
+pub mod RaceUIMiniMap;
+pub mod RaceViewReplay;
+pub mod RaceSimulateData;
+pub mod RaceSimulateEventData;
+pub mod RaceSimulateReader;
+pub mod RaceHorseManagerReplay;
+pub mod RaceSimulateFrameData;
+pub mod RaceSimulateHorseFrameData;
 
 #[path = "SimulateEventType.rs"]
 mod simulate_event_type;
