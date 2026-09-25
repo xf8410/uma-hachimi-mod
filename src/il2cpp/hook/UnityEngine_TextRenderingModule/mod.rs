@@ -12,11 +12,11 @@ pub enum TextAnchor {
     MiddleRight,
     LowerLeft,
     LowerCenter,
-    LowerRight
+    LowerRight,
 }
 impl TryFrom<i32> for TextAnchor {
     type Error = ();
-    fn try_from(value: i32) -> Result<Self, Self::Error > {
+    fn try_from(value: i32) -> Result<Self, ()> {
         if value < 0 || value > 8 {
             return Err(());
         }
@@ -27,7 +27,9 @@ impl TryFrom<i32> for TextAnchor {
 pub fn init() {
     get_assembly_image_or_return!(image, "UnityEngine.TextRenderingModule.dll");
 
-    TextGenerator::init(image);
+    // PopulateWithErrors and TextMesh.set_text are translation/template hooks.
+    // Font still provides a type object used by non-translation code.
+    TextGenerator::init(image, install_translation_hook = false);
     Font::init(image);
-    TextMesh::init(image);
+    TextMesh::init(image, install_translation_hook = false);
 }
