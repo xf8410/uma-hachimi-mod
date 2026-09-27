@@ -1,58 +1,79 @@
-<img align="left" width="80" height="80" src="assets/icon.png">
+# uma-hachimi-mod
 
-# Hachimi Edge
+赛马娘线专用的 Hachimi-Edge 魔改版：**摘除翻译与贴图管线，只保留画面/功能增强**，并内建合并 `hachimi-ura` 相关的 hook。
 
-English | [简体中文](README-zh_cn.md) | [繁體中文](README-zh_tw.md)
+> **私有仓，不对外发布。** 本仓库仅供仓主自用构建。
 
-[![Discord server](https://dcbadge.limes.pink/api/server/https://discord.gg/YjBgmuqqYr)](https://discord.gg/YjBgmuqqYr)
+---
 
-Game enhancement and translation mod for UM:PD.
+## 这是什么
 
-<img width="100%" height="100%" src="assets/screenshot-1.png">
-<img width="100%" height="100%" src="assets/screenshot-2.png">
+源码拷贝自 [kairusds/Hachimi-Edge](https://github.com/kairusds/Hachimi-Edge)（Rust，GPLv3），**与上游无 fork 关系**，仅为内部基线。
 
-# ⚠️ Please don't link to this repo or Hachimi's website
-We understand that you want to help people install Hachimi and have a better experience playing the game. However, this project is inherently against the game's TOS and The Game Developer most definitely wants it gone if they were ever to learn about it.
+在赛马娘这条线上，原版的两大管线是负资产：
 
-While sharing in your self-managed chat services and through private messaging is fine, we humbly ask that you refrain from sharing links to this project on public facing sites, or to any of the tools involved.
+| 上游能力 | 本仓处理 |
+|---|---|
+| 文本翻译（UI / master.mdb / 剧情 / 歌词） | **摘除** |
+| 贴图、图集替换 | **摘除** |
+| 画质与功能增强（帧率解锁、分辨率缩放、Race Stat HUD 等） | **保留** |
+| `hachimi-ura` 合并的 hook | **保留** |
 
-Or share them and ruin it for the dozens of Hachimi users. It's up to you.
+理由：赛马娘本体自带完整汉化，上游翻译管线既无收益，又带来 `rust-i18n`、`ureq`、`png`、`image`、`blake3` 等一整套依赖和运行时开销。
 
-### If you're going to share it anyways
-Do what you must, but we would respectfully request that you try to label the game as "UM:PD" or "The Honse Game" instead of the actual name of the game, to avoid search engine parsing.
+---
 
-# Features
-- **High quality translations:** Hachimi comes with advanced translation features that help translations feel more natural (plural forms, ordinal numbers, etc.) and prevent introducing jank to the UI. It also supports translating most in-game components; no manual assets patching needed!
+## 相对上游改了什么
 
-    Supported components:
-    - UI text
-    - master.mdb (skill name, skill desc, etc.)
-    - Race story
-    - Main story/Home dialog
-    - Lyrics
-    - Texture replacement
-    - Sprite atlas replacement
+当前魔改分支 `workbench/no-translation`，相对 `main` 领先 40 个提交。
 
-    Additionally, Hachimi does not provide translation features for only a single language; it has been designed to be fully configurable for any language.
+### 摘除
 
-- **Easy setup:** Just plug and play. All setup is done within the game itself, no external application needed.
-- **Translation auto update:** Built-in translation updater lets you play the game as normal while it updates, and reloads it in-game when it's done, no restart needed!
-- **Built-in GUI:** Comes with a config editor so you can modify settings without even exiting the game!
-- **Graphics settings:** You can adjust the game's graphics settings to make full use of your device's specs, such as FPS unlocking and resolution scaling.
-- **Cross-platform:** Designed from the ground up to be portable, with Windows and Android support.
+- `assets/locales/ko.yml` 整份删除（-1065 行）
+- `src/il2cpp/hook/UnityEngine_TextRenderingModule/TextGenerator.rs`（-200）
+- `src/il2cpp/hook/umamusume/StoryTimelineData.rs`（-557）
+- `src/il2cpp/hook/umamusume/UIManager.rs`（-119）
+- `src/il2cpp/hook/umamusume/GameSystem.rs`（-113）
+- `src/il2cpp/hook/umamusume/mod.rs`（-96）
+- `create_release.yml` 上游的多平台发布逻辑（-206）
 
-# Installation
-Please see the [Getting started](https://hachimi.noccu.art/docs/hachimi/getting-started.html) page.
+### 保留 / 调整
 
-# Special thanks
-These projects have been the basis for Hachimi's development; without them, Hachimi would never have existed in its current form:
+- `src/android/hook.rs`、`src/android/main.rs` —— Android 侧 hook 与入口
+- `src/lib.rs`
+- `Application.rs`、`TextMesh.rs`、`Text.rs` —— 保留渲染增强相关部分
+- `create_release.yml` 改为只出 Android `.so`，`prerelease`，body 注明仅供仓主
 
-- [Trainers' Legend G](https://github.com/MinamiChiwa/Trainers-Legend-G)
-- [umamusume-localify-android](https://github.com/Kimjio/umamusume-localify-android)
-- [umamusume-localify](https://github.com/GEEKiDoS/umamusume-localify)
-- [Carotenify](https://github.com/KevinVG207/Uma-Carotenify)
-- [umamusu-translate](https://github.com/noccu/umamusu-translate)
-- [frida-il2cpp-bridge](https://github.com/vfsfitvnm/frida-il2cpp-bridge)
+---
 
-# License
-[GNU GPLv3](LICENSE)
+## 构建与发布
+
+CI 走 `workflow_dispatch`（`.github/workflows/create_release.yml`）：
+
+```
+Android: aarch64-linux-android，RELEASE=1 ./tools/android/build.sh
+产物:   build/*.so + build/sha256.json
+发布:   softprops/action-gh-release，tag 取 Cargo.toml 的 version，prerelease
+```
+
+**已知构建前提**：工作流会现场 clone `emilk/egui` 并 patch `combo_box.rs`（绕开 `set_min_width` 问题），再把路径依赖写进 `Cargo.toml`。
+
+**版本号唯一来源**：`Cargo.toml` 的 `version`，当前 `0.31.2` → tag `v0.31.2`。
+
+**注意**：release 只在 `workbench/no-translation` 上验证过；`main` 仍是未魔改的上游基线，不要从 `main` 发版。
+
+---
+
+## 分支说明
+
+| 分支 | 内容 |
+|---|---|
+| `main` | 上游原样基线，勿改 |
+| `workbench/no-translation` | **魔改实际所在**，改代码、发版都走这条 |
+
+---
+
+## 来源与许可
+
+代码来自 kairusds/Hachimi-Edge，遵循其 [GNU GPLv3](LICENSE)。
+本仓为私有衍生作品，不对外分发。

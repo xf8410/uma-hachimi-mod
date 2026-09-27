@@ -22,7 +22,7 @@ macro_rules! new_hook {
 }
 
 macro_rules! get_assembly_image_or_return {
-    ($var_name:ident, $assembly_name:tt) => (
+    ($var_name:ident, $assembly_name:tt) => {
         let $var_name = match crate::il2cpp::symbols::get_assembly_image(cstr!($assembly_name)) {
             Ok(v) => v,
             Err(e) => {
@@ -30,11 +30,11 @@ macro_rules! get_assembly_image_or_return {
                 return;
             }
         };
-    )
+    }
 }
 
 macro_rules! get_class_or_return {
-    ($image:ident, $namespace:tt, $class_name:ident) => (
+    ($image:ident, $namespace:tt, $class_name:ident) => {
         let $class_name = match crate::il2cpp::symbols::get_class($image, cstr!($namespace), cstr!($class_name)) {
             Ok(v) => v,
             Err(e) => {
@@ -42,11 +42,11 @@ macro_rules! get_class_or_return {
                 return;
             }
         };
-    )
+    }
 }
 
 macro_rules! find_nested_class_or_return {
-    ($parent:ident, $class_name:ident) => (
+    ($parent:ident, $class_name:ident) => {
         let $class_name = match crate::il2cpp::symbols::find_nested_class($parent, cstr!($class_name)) {
             Ok(v) => v,
             Err(e) => {
@@ -54,7 +54,7 @@ macro_rules! find_nested_class_or_return {
                 return;
             }
         };
-    )
+    }
 }
 
 // shorter ver of doing impl_addr_wrapper_fn!()
@@ -152,7 +152,6 @@ macro_rules! def_field_object_accessors {
         pub fn $get_name(this: *mut Il2CppObject) -> *mut $t {
             crate::il2cpp::symbols::get_field_object_value(this, unsafe { $field })
         }
-
         pub fn $set_name(this: *mut Il2CppObject, value: *mut $t) {
             crate::il2cpp::symbols::set_field_object_value(this, unsafe { $field }, value)
         }
@@ -199,13 +198,13 @@ mod DOTween;
 mod Cute_Core_Assembly;
 
 pub fn init() {
-    info!("Initializing il2cpp hooks");
+    info!("Initializing il2cpp hooks (no-translation build)");
 
     // C# / .NET
     mscorlib::init();
 
-    // Unity
-    UnityEngine_AssetBundleModule::init();
+    // Unity. AssetBundle is intentionally not initialized: its three hooks
+    // are the entry point for texture-difference, atlas and story JSON patches.
     UnityEngine_CoreModule::init();
     UnityEngine_TextRenderingModule::init();
     UnityEngine_ImageConversionModule::init();
@@ -221,11 +220,9 @@ pub fn init() {
         Unity_InputSystem::init();
     }
 
-    // Umamusume
-    LibNative_Runtime::init();
+    // Keep the game/core hooks. LibNative SQL observation, Cute.UI atlas
+    // patching and Plugins/AnimateToUnity asset patching stay uninitialized.
     umamusume::init();
-    Cute_UI_Assembly::init();
-    Plugins::init();
     Cute_Cri_Assembly::init();
     CriMw_CriWare_Runtime::init();
     DOTween::init();
@@ -233,5 +230,5 @@ pub fn init() {
     #[cfg(target_os = "android")]
     Cute_Core_Assembly::init();
 
-    info!("Hooking finished");
+    info!("Hooking finished (no-translation build)");
 }

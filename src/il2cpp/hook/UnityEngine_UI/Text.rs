@@ -1,9 +1,10 @@
 use std::sync::Mutex;
+
 use fnv::FnvHashMap;
 use once_cell::sync::Lazy;
 use crate::core::sugoi_client::{SugoiClient, StringInfo};
-use crate::il2cpp::symbols::GCHandle;
-use crate::il2cpp::{ext::{Il2CppStringExt, StringExt}, hook::UnityEngine_TextRenderingModule::TextAnchor, symbols::get_method_addr, types::*};
+use crate::il2cpp::symbols::{GCHandle, get_method_addr};
+use crate::il2cpp::{ext::{Il2CppStringExt, StringExt}, hook::UnityEngine_TextRenderingModule::TextAnchor, types::*};
 
 static mut GET_LINESPACING_ADDR: usize = 0;
 impl_addr_wrapper_fn!(get_lineSpacing, GET_LINESPACING_ADDR, f32, this: *mut Il2CppObject);
@@ -63,9 +64,7 @@ pub fn set_best_fit_downscale(this: *mut Il2CppObject) {
     set_best_fit(this, true);
 }
 
-pub static ACTIVE_TEXT_COMPONENTS: Lazy<Mutex<FnvHashMap<usize, StringInfo>>> = Lazy::new(|| {
-    Mutex::new(FnvHashMap::default())
-});
+pub static ACTIVE_TEXT_COMPONENTS: Lazy<Mutex<FnvHashMap<usize, StringInfo>>> = Lazy::new(|| Mutex::new(FnvHashMap::default()));
 
 type SetTextFn = extern "C" fn(this: *mut Il2CppObject, value: *mut Il2CppString);
 pub extern "C" fn set_text_hook(this: *mut Il2CppObject, value: *mut Il2CppString) {
@@ -81,7 +80,7 @@ pub extern "C" fn set_text_hook(this: *mut Il2CppObject, value: *mut Il2CppStrin
     let orig_str = unsafe { (*value).as_utf16str().to_string() };
     let str_info = StringInfo {
         str_handle: GCHandle::new_weak_ref(this, false),
-        str: orig_str.clone()
+        str: orig_str.clone(),
     };
 
     ACTIVE_TEXT_COMPONENTS.lock().unwrap().insert(this as usize, str_info);
@@ -97,12 +96,9 @@ pub fn apply_translations(completed: &[(String, String)]) {
     let mut updates_to_apply = Vec::new();
     {
         let mut tracker = ACTIVE_TEXT_COMPONENTS.lock().unwrap();
-
         tracker.retain(|_, info| !info.object().is_null());
-
         for (orig, trans) in completed {
             let unity_string = trans.to_il2cpp_string();
-
             for (&ptr, saved_orig) in tracker.iter() {
                 if &saved_orig.str == orig {
                     updates_to_apply.push((ptr, unity_string));
@@ -110,17 +106,18 @@ pub fn apply_translations(completed: &[(String, String)]) {
             }
         }
     }
-
     for (ptr, unity_string) in updates_to_apply {
         get_orig_fn!(set_text_hook, SetTextFn)(ptr as *mut Il2CppObject, unity_string);
     }
 }
 
-pub fn init(UnityEngine_UI: *const Il2CppImage) {
+pub fn init(UnityEngine_UI: *const Il2CppImage, install_translation_hook: bool) {
     get_class_or_return!(UnityEngine_UI, "UnityEngine.UI", Text);
 
-    let set_text_addr = get_method_addr(Text, c"set_text", 1);
-    new_hook!(set_text_addr, set_text_hook);
+    if install_translation_hook {
+        let set_text_addr = get_method_addr(Text, c"set_text", 1);
+        new_hook!(set_text_addr, set_text_hook);
+    }
 
     unsafe {
         GET_LINESPACING_ADDR = get_method_addr(Text, c"get_lineSpacing", 0);
@@ -134,11 +131,11 @@ pub fn init(UnityEngine_UI: *const Il2CppImage) {
         SET_TEXT_ADDR = get_method_addr(Text, c"set_text", 1);
         SET_ALIGNMENT_ADDR = get_method_addr(Text, c"set_alignment", 1);
         GET_PREFERREDHEIGHT_ADDR = get_method_addr(Text, c"get_preferredHeight", 0);
-        GET_PREFERRED_WIDTH_ADDR = get_method_addr(Text, c"get_preferredWidth", 0);
         GET_BEST_FIT_ADDR = get_method_addr(Text, c"get_resizeTextForBestFit", 0);
         SET_BEST_FIT_ADDR = get_method_addr(Text, c"set_resizeTextForBestFit", 1);
         SET_BEST_FIT_MIN_SIZE_ADDR = get_method_addr(Text, c"set_resizeTextMinSize", 1);
         SET_BEST_FIT_MAX_SIZE_ADDR = get_method_addr(Text, c"set_resizeTextMaxSize", 1);
+        GET_PREFERRED_WIDTH_ADDR = get_method_addr(Text, c"get_preferredWidth", 0);
         ASSIGNDEFAULTFONT_ADDR = get_method_addr(Text, c"AssignDefaultFont", 0);
     }
 }

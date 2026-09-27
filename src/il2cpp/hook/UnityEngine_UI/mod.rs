@@ -11,8 +11,10 @@ pub mod ContentSizeFitter;
 
 pub fn init() {
     get_assembly_image_or_return!(image, "UnityEngine.UI.dll");
-    
-    Text::init(image);
+
+    // Resolve Text method addresses used by non-translation code, but do not
+    // install its auto-translation set_text hook.
+    Text::init(image, false);
     CanvasScaler::init(image);
     EventSystem::init(image);
     LayoutElement::init(image);

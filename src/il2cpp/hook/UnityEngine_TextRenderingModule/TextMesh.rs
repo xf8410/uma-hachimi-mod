@@ -1,12 +1,13 @@
 use std::sync::Mutex;
+
 use fnv::FnvHashMap;
 use once_cell::sync::Lazy;
-use crate::core::sugoi_client::{SugoiClient, StringInfo};
-use crate::il2cpp::{ext::{Il2CppStringExt, StringExt}, symbols::{get_method_addr, GCHandle}, types::*};
 
-pub static ACTIVE_TEXT_MESH_COMPONENTS: Lazy<Mutex<FnvHashMap<usize, StringInfo>>> = Lazy::new(|| {
-    Mutex::new(FnvHashMap::default())
-});
+use crate::core::sugoi_client::{StringInfo, SugoiClient};
+use crate::il2cpp::{ext::{Il2CppStringExt, StringExt}, symbols::{GCHandle, get_method_addr}, types::*};
+
+pub static ACTIVE_TEXT_MESH_COMPONENTS: Lazy<Mutex<FnvHashMap<usize, StringInfo>>> =
+    Lazy::new(|| Mutex::new(FnvHashMap::default()));
 
 type SetTextFn = extern "C" fn(this: *mut Il2CppObject, value: *mut Il2CppString);
 pub extern "C" fn set_text_hook(this: *mut Il2CppObject, value: *mut Il2CppString) {
@@ -22,9 +23,8 @@ pub extern "C" fn set_text_hook(this: *mut Il2CppObject, value: *mut Il2CppStrin
     let orig_str = unsafe { (*value).as_utf16str().to_string() };
     let str_info = StringInfo {
         str_handle: GCHandle::new_weak_ref(this, false),
-        str: orig_str.clone()
+        str: orig_str.clone(),
     };
-
     ACTIVE_TEXT_MESH_COMPONENTS.lock().unwrap().insert(this as usize, str_info);
 
     if let Some(trans) = SugoiClient::instance().get_cached(&orig_str) {
@@ -38,12 +38,9 @@ pub fn apply_translations(completed: &[(String, String)]) {
     let mut updates_to_apply = Vec::new();
     {
         let mut tracker = ACTIVE_TEXT_MESH_COMPONENTS.lock().unwrap();
-
         tracker.retain(|_, info| !info.object().is_null());
-
         for (orig, trans) in completed {
             let unity_string = trans.to_il2cpp_string();
-
             for (&ptr, saved_orig) in tracker.iter() {
                 if &saved_orig.str == orig {
                     updates_to_apply.push((ptr, unity_string));
@@ -51,15 +48,15 @@ pub fn apply_translations(completed: &[(String, String)]) {
             }
         }
     }
-
     for (ptr, unity_string) in updates_to_apply {
         get_orig_fn!(set_text_hook, SetTextFn)(ptr as *mut Il2CppObject, unity_string);
     }
 }
 
-pub fn init(UnityEngine_TextRenderingModule: *const Il2CppImage) {
+pub fn init(UnityEngine_TextRenderingModule: *const Il2CppImage, install_translation_hook: bool) {
     get_class_or_return!(UnityEngine_TextRenderingModule, UnityEngine, TextMesh);
-
-    let set_text_addr = get_method_addr(TextMesh, c"set_text", 1);
-    new_hook!(set_text_addr, set_text_hook);
+    if install_translation_hook {
+        let set_text_addr = get_method_addr(TextMesh, c"set_text", 1);
+        new_hook!(set_text_addr, set_text_hook);
+    }
 }
